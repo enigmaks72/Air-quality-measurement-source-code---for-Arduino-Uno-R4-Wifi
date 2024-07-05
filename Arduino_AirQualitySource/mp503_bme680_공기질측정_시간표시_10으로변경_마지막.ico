@@ -1,0 +1,119 @@
+#include <WiFi.h>
+#include <NTPClient.h>
+#include <WiFiUdp.h>
+
+// WiFi 설정
+const char* ssid = "onion";
+const char* password = "0323249817";
+
+// NTP 서버 설정
+WiFiUDP ntpUDP;
+NTPClient timeClient(ntpUDP, "pool.ntp.org", 9 * 3600, 60000);  // 서울 시간대 UTC+9, 1분 간격으로 업데이트
+
+const int sensorPin = 8;  // MP503 센서 핀
+unsigned long previousMillis = 0;
+const long interval = 3000; // 3초 간격
+
+void setup() {
+  Serial.begin(9600);
+  
+  // WiFi 연결
+  Serial.print("Connecting to ");
+  Serial.println(ssid);
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println("WiFi connected.");
+  
+  // NTPClient 시작
+  timeClient.begin();
+  timeClient.setTimeOffset(9 * 3600);  // 서울 시간대 설정
+  
+  pinMode(sensorPin, INPUT);
+}
+
+void loop() {
+  unsigned long currentMillis = millis();
+
+  if (currentMillis - previousMillis >= interval) {
+    previousMillis = currentMillis;
+    
+    // 현재 시간 가져오기
+    timeClient.update();
+    String formattedTime = timeClient.getFormattedTime();
+
+    int airQuality = ZP07_MP503(sensorPin);
+    String gasType = getGasType(airQuality);
+
+    Serial.print("Current air quality rating: ");
+    Serial.print(airQuality);
+    Serial.print(" | Time: ");
+    Serial.print(formattedTime);
+    Serial.print(" | 검출된 가스: ");
+    Serial.print(gasType);
+    Serial.print(" | pinAstate: ");
+    Serial.print(digitalRead(sensorPin));
+    Serial.print(", air quality level: ");
+    Serial.print(airQuality);
+    Serial.print(", deltaMillisTimes: ");
+    Serial.println(millis() - previousMillis);
+  }
+}
+
+int ZP07_MP503(int pinA) {
+  // 초기화
+  pinMode(pinA, INPUT);
+  unsigned long startMillisTimes = millis();
+  unsigned long stopMillisTimes;
+  unsigned long deltaMillisTimes = 0;
+  bool turnState = false;
+  bool pinAstate = digitalRead(pinA);
+  bool pinAstateLast = pinAstate;
+  int result = 0;
+
+  // 테스트 읽기 상태
+  while (true) {
+    pinAstate = digitalRead(pinA);    // 핀 상태 읽기
+
+    if (pinAstate != pinAstateLast) {
+      if (turnState == true) {
+        stopMillisTimes = millis();
+        deltaMillisTimes = stopMillisTimes - startMillisTimes;
+        result = map(deltaMillisTimes, 0, 100, 0, 10); // 0에서 10까지 매핑
+        break; // 루프 탈출
+      }
+      if (turnState == false) {
+        startMillisTimes = millis();    // 현재 시간 새로고침
+        turnState = true;               // 플래그 업데이트
+      }
+      pinAstateLast = pinAstate;
+    }
+
+    if (millis() - startMillisTimes > 100) { // 결과 판단, 시간 초과시 루프 탈출
+      result = pinAstate ? 10 : 0; // 최대 공기질 등급 10
+      break;
+    }
+  }
+
+  // 디버그 출력
+  Serial.print("Debug: pinAstate: ");
+  Serial.print(pinAstate);
+  Serial.print(" ,  공기질 등급: ");
+  Serial.print(result);
+  Serial.print(", deltaMillisTimes: ");
+  Serial.println(deltaMillisTimes);
+
+  return result;  // 공기질 등급 결과 반환
+}
+
+String getGasType(int airQuality) {
+  if (airQuality == 0) return "좋은 공기";
+  if (airQuality == 1) return "조금 오염된 공기";
+  if (airQuality <= 2) return "알코올 또는 연기";
+  if (airQuality <= 4) return "톨루엔 또는 아세톤";
+  if (airQuality <= 6) return "암모니아";
+  if (airQuality <= 8) return "메탄";
+  return "위험한 공기";
+}

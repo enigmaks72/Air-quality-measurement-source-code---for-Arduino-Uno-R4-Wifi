@@ -1,0 +1,84 @@
+//
+// Author: Aiyauto
+// VERSION: 0.0.1
+// Date:2017/08/16
+// PURPOSE: ZP07_MP503 공기질 모듈 테스트 예제 for Arduino
+//
+
+int airQuality; // 공기질 등급 0-10
+
+void setup() {
+  Serial.begin(9600); // 시리얼 통신 시작
+  Serial.println("Setup complete");
+}
+
+void loop() {
+    int deltaMillisTimes;
+    airQuality = ZP07_MP503(8, deltaMillisTimes); // D8 핀에서 공기질 데이터 읽기
+    Serial.print("Current air quality rating: ");
+    Serial.print(airQuality);
+    Serial.print(" | pinAstate: ");
+    Serial.print(digitalRead(8));
+    Serial.print(", air quality level: ");
+    Serial.print(airQuality);
+    Serial.print(", deltaMillisTimes: ");
+    Serial.println(deltaMillisTimes);
+    delay(1000); // 1초 대기
+}
+
+int ZP07_MP503(int pinA, int &deltaMillisTimes) {
+    /* 초기화 */
+    pinMode(pinA, INPUT);
+    unsigned long millisTimes = millis();
+    unsigned long startMillisTimes = millisTimes;
+    unsigned long stopMillisTimes;
+    deltaMillisTimes = millisTimes - startMillisTimes;
+    bool turnState = false;
+    bool pinAstate = digitalRead(pinA);
+    bool pinAstateLast = pinAstate;
+    int result;
+
+    /* 상태 읽기 테스트 */
+    while (true) {
+        pinAstate = digitalRead(pinA); // 핀 상태 읽기
+
+        if (pinAstate != pinAstateLast) { // 상태가 변경된 경우
+            if (turnState == true) {
+                stopMillisTimes = millis();
+                if (pinAstate == false) {
+                    deltaMillisTimes = stopMillisTimes - startMillisTimes;
+                } else {
+                    deltaMillisTimes = 98 - stopMillisTimes + startMillisTimes;
+                }
+                result = (deltaMillisTimes + 5) / 10; // 결과 반올림
+                break; // 루프 탈출
+            }
+            if (turnState == false) {
+                startMillisTimes = millis(); // 현재 시간 새로고침
+                turnState = true; // 상태 변경
+            }
+            pinAstateLast = pinAstate; // 이전 상태 업데이트
+        }
+
+        millisTimes = millis();
+        deltaMillisTimes = millisTimes - startMillisTimes;
+        if (deltaMillisTimes > 100) { // 결과 판단, 타임아웃 시 루프 탈출
+            if (pinAstate == true) { // 공기질 등급 10
+                result = 1;
+            }
+            if (pinAstate == false) { // 공기질 등급 0
+                result = 0;
+            }
+            break;
+        }
+    }
+
+    Serial.print("Debug: pinAstate: ");
+    Serial.print(pinAstate);
+    Serial.print(" , air quality level: ");
+    Serial.print(result);
+    Serial.print(", deltaMillisTimes: ");
+    Serial.println(deltaMillisTimes);
+
+    return result; // 공기질 등급 결과 반환
+}

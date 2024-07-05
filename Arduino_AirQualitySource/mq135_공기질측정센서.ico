@@ -1,0 +1,105 @@
+#include <WiFi.h>
+#include <NTPClient.h>
+#include <WiFiUdp.h>
+
+// WiFi 설정
+const char* ssid = "onion";
+const char* password = "0323249817";
+
+// NTP 서버 설정
+WiFiUDP ntpUDP;
+NTPClient timeClient(ntpUDP, "pool.ntp.org", 9 * 3600, 60000);  // 서울 시간대 UTC+9, 1분 간격으로 업데이트
+
+const int sensorPin = A3;  // MQ135 센서 핀
+
+void setup() {
+  Serial.begin(9600);
+  
+  // WiFi 연결
+  Serial.print("Connecting to ");
+  Serial.println(ssid);
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println("WiFi connected.");
+  
+  // NTPClient 시작
+  timeClient.begin();
+  timeClient.setTimeOffset(9 * 3600);  // 서울 시간대 설정
+  
+  pinMode(sensorPin, INPUT);
+}
+
+void loop() {
+  // 현재 시간 가져오기
+  timeClient.update();
+  String formattedTime = timeClient.getFormattedTime();
+  
+  int sensorValue = analogRead(sensorPin);
+  float voltage = sensorValue * (5.0 / 1023.0);
+
+  // 가스 농도 계산 (여기서는 예시로 대략적인 값을 사용)
+  float co2 = calculateCO2(voltage);
+  float nh3 = calculateNH3(voltage);
+  float nox = calculateNOX(voltage);
+  float alcohol = calculateAlcohol(voltage);
+  float benzene = calculateBenzene(voltage);
+  float smoke = calculateSmoke(voltage);
+
+  // 시리얼 모니터에 출력
+  Serial.print("Current Time: ");
+  Serial.println(formattedTime);
+  Serial.print("CO2: ");
+  Serial.print(co2);
+  Serial.println(" ppm");
+  Serial.print("NH3: ");
+  Serial.print(nh3);
+  Serial.println(" ppm");
+  Serial.print("NOx: ");
+  Serial.print(nox);
+  Serial.println(" ppm");
+  Serial.print("Alcohol: ");
+  Serial.print(alcohol);
+  Serial.println(" ppm");
+  Serial.print("Benzene: ");
+  Serial.print(benzene);
+  Serial.println(" ppm");
+  Serial.print("Smoke: ");
+  Serial.print(smoke);
+  Serial.println(" ppm");
+  Serial.println("--------------------------");
+  
+  delay(3000); // 3초 간격으로 업데이트
+}
+
+float calculateCO2(float voltage) {
+  // CO2 농도 계산식 (예시)
+  return voltage * 200.0;
+}
+
+float calculateNH3(float voltage) {
+  // NH3 농도 계산식 (예시)
+  return voltage * 150.0;
+}
+
+float calculateNOX(float voltage) {
+  // NOx 농도 계산식 (예시)
+  return voltage * 100.0;
+}
+
+float calculateAlcohol(float voltage) {
+  // 알콜 농도 계산식 (예시)
+  return voltage * 130.0;
+}
+
+float calculateBenzene(float voltage) {
+  // 벤젠 농도 계산식 (예시)
+  return voltage * 140.0;
+}
+
+float calculateSmoke(float voltage) {
+  // 연기 농도 계산식 (예시)
+  return voltage * 110.0;
+}

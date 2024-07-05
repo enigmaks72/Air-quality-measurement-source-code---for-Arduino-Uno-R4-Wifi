@@ -1,0 +1,232 @@
+#include <Wire.h>
+#include <Adafruit_Sensor.h>
+#include <Adafruit_BME680.h>
+#include <WiFi.h>
+#include <WiFiUdp.h>
+#include <NTPClient.h>
+
+// WiFi 설정
+const char* ssid = "onion";
+const char* password = "0323249817";
+
+// NTP 서버 설정
+WiFiUDP ntpUDP;
+NTPClient timeClient(ntpUDP, "pool.ntp.org", 9 * 3600, 60000);  // 서울 시간대 UTC+9, 1분 간격으로 업데이트
+
+// 센서 핀 설정
+const int mq135Pin = A2;  // MQ135 센서 핀
+const int mp503Pin = A3;  // MP503 센서 핀
+
+// BME680 객체 생성
+Adafruit_BME680 bme; // I2C interface
+
+unsigned long previousMillis = 0;
+const long interval = 5000; // 5초 간격
+
+void setup() {
+  Serial.begin(9600);
+  
+  // WiFi 연결
+  Serial.print("Connecting to ");
+  Serial.println(ssid);
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println("WiFi connected.");
+  
+  // NTPClient 시작
+  timeClient.begin();
+  timeClient.setTimeOffset(9 * 3600);  // 서울 시간대 설정
+
+  // BME680 센서 초기화
+  if (!bme.begin()) {
+    Serial.println("BME680 sensor not found, check wiring!");
+  } else {
+    Serial.println("BME680 sensor found and initialized.");
+  }
+  
+  // 핀 모드 설정
+  pinMode(mq135Pin, INPUT);
+  pinMode(mp503Pin, INPUT);
+
+  // MQ135 센서 확인
+  if (analogRead(mq135Pin) == 0) {
+    Serial.println("MQ135 sensor not found, check wiring!");
+  } else {
+    Serial.println("MQ135 sensor found and initialized.");
+  }
+
+  // MP503 센서 확인
+  if (digitalRead(mp503Pin) == 0) {
+    Serial.println("MP503 sensor not found, check wiring!");
+  } else {
+    Serial.println("MP503 sensor found and initialized.");
+  }
+}
+
+void loop() {
+  unsigned long currentMillis = millis();
+
+  if (currentMillis - previousMillis >= interval) {
+    previousMillis = currentMillis;
+    
+    // 현재 시간 가져오기
+    timeClient.update();
+    String formattedTime = timeClient.getFormattedTime();
+    
+    // BME680 센서 읽기
+    if (!bme.performReading()) {
+      Serial.println("Failed to perform BME680 reading :(");
+      return;
+    }
+    
+    // MQ135 센서 읽기
+    int mq135Value = analogRead(mq135Pin);
+    float mq135Voltage = mq135Value * (5.0 / 1023.0);
+
+    // MP503 센서 읽기
+    int airQuality = ZP07_MP503(mp503Pin);
+    String gasType = getGasType(airQuality);
+
+    // 시리얼 모니터에 출력
+    Serial.print("Current time: ");
+    Serial.println(formattedTime);
+   
+    // BME680 데이터 출력
+    Serial.println("BME680 become activated...");
+    Serial.print("Temperature: ");
+    Serial.print(bme.temperature);
+    Serial.println(" °C");
+    Serial.print("Humidity: ");
+    Serial.print(bme.humidity);
+    Serial.println(" %");
+    Serial.print("Pressure: ");
+    Serial.print(bme.pressure / 100.0);
+    Serial.println(" hPa");
+    Serial.print("Gas Resistance: ");
+    Serial.print(bme.gas_resistance / 1000.0); // Convert to KOhms
+    Serial.println(" KOhms");
+
+    // MQ135 데이터 출력
+    Serial.println("MQ135 become activated...");
+    Serial.print("CO2: ");c:\어니언\공기정화식물\MP503_공기질출력_현재시간출력.ico
+    Serial.print(calculateCO2(mq135Voltage));
+    Serial.println(" ppm");
+    Serial.print("NH3: ");
+    Serial.print(calculateNH3(mq135Voltage));
+    Serial.println(" ppm");c:\어니언\공기정화식물\아두이노소스\mq135_공기질측정센서.ico
+    Serial.print("NOx: ");
+    Serial.print(calculateNOX(mq135Voltage));
+    Serial.println(" ppm");
+    Serial.print("Alcohol: ");
+    Serial.print(calculateAlcohol(mq135Voltage));
+    Serial.println(" ppm");
+    Serial.print("Benzene: ");
+    Serial.print(calculateBenzene(mq135Voltage));
+    Serial.println(" ppm");
+    Serial.print("Smoke: ");
+    Serial.print(calculateSmoke(mq135Voltage));
+    Serial.println(" ppm");
+
+    // MP503 데이터 출력
+    Serial.println("MP503 become activated...");
+    Serial.print("Current air quality rating: ");
+    Serial.print(airQuality);
+    Serial.print(" | 검출된 가스: ");
+    Serial.print(gasType);
+    Serial.print(" | pinAstate: ");
+    Serial.print(digitalRead(mp503Pin));
+    Serial.print(", air quality level: ");
+    Serial.print(airQuality);
+    Serial.print(", deltaMillisTimes: ");
+    Serial.println(millis() - previousMillis);
+    Serial.println("--------------------------");
+  }
+}
+
+float calculateCO2(float voltage) {
+  // CO2 농도 계산식 (예시)
+  return voltage * 200.0;
+}
+
+float calculateNH3(float voltage) {
+  // NH3 농도 계산식 (예시)
+  return voltage * 150.0;
+}
+
+float calculateNOX(float voltage) {
+  // NOx 농도 계산식 (예시)
+  return voltage * 100.0;
+}
+
+float calculateAlcohol(float voltage) {
+  // 알콜 농도 계산식 (예시)
+  return voltage * 130.0;
+}
+
+float calculateBenzene(float voltage) {
+  // 벤젠 농도 계산식 (예시)
+  return voltage * 140.0;
+}
+
+float calculateSmoke(float voltage) {
+  // 연기 농도 계산식 (예시)
+  return voltage * 110.0;
+}
+
+int ZP07_MP503(int pinA) {
+  // 초기화
+  pinMode(pinA, INPUT);
+  unsigned long startMillisTimes = millis();
+  unsigned long stopMillisTimes;
+  unsigned long deltaMillisTimes = 0;
+  bool turnState = false;
+  bool pinAstate = digitalRead(pinA);
+  bool pinAstateLast = pinAstate;
+  int result = 0;
+
+  // 테스트 읽기 상태
+  while (true) {
+    pinAstate = digitalRead(pinA);    // 핀 상태 읽기
+
+    if (pinAstate != pinAstateLast) {
+      if (turnState == true) {
+        stopMillisTimes = millis();
+        deltaMillisTimes = stopMillisTimes - startMillisTimes;
+        result = map(deltaMillisTimes, 0, 100, 0, 10); // 0에서 10까지 매핑
+        break; // 루프 탈출
+      }
+      if (turnState == false) {
+        startMillisTimes = millis();    // 현재 시간 새로고침
+        turnState = true;               // 플래그 업데이트
+      }
+      pinAstateLast = pinAstate;
+    }
+
+    if (millis() - startMillisTimes > 100) { // 결과 판단, 시간 초과시 루프 탈출
+      result = pinAstate ? 10 : 0; // 최대 공기질 등급 10
+      break;
+    }
+  }
+
+  // 디버그 출력
+  Serial.print("Debug: pinAstate: ");
+  Serial.print(pinAstate);
+  Serial.print(" ,  공기질 등급: ");
+  Serial.print(result);
+  Serial.print(", deltaMillisTimes: ");
+  Serial.println(deltaMillisTimes);
+
+  return result;  // 공기질 등급 결과 반환
+}
+
+String getGasType(int airQuality) {
+  if (airQuality == 0) return "없음, 좋은 공기";
+  if (airQuality <= 2) return "알코올 또는 연기";
+  if (airQuality <= 4) return "톨루엔 또는 아세톤";
+  if (airQuality <= 6) return "암모니아";
+  if (airQuality <= 8) return "메탄";
+  return "위험한 공기";
+}
