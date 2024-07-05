@@ -8,7 +8,7 @@
 
 // WiFi 설정
 const char* ssid = "onion";
-const char* password = "0323249817";
+const char* password = "7";
 
 // NTP 서버 설정
 const long utcOffsetInSeconds = 9 * 3600; // UTC+9 (KST)
