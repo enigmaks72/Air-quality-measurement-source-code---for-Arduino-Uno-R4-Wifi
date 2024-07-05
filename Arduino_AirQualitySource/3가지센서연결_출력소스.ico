@@ -7,7 +7,7 @@
 
 // WiFi 설정
 const char* ssid = "onion";
-const char* password = "0323249817";
+const char* password = "";
 
 // NTP 서버 설정
 WiFiUDP ntpUDP;
